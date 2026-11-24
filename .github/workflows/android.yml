@@ -1,0 +1,27 @@
+name: Android checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python3 tools/check_public_source.py
+      - run: node verification/verify-reader.cjs
+      - run: chmod +x gradlew
+      - run: ./gradlew --no-daemon assembleDebug testDebugUnitTest assembleDebugAndroidTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: miaomiao-reader-dev-apk
+          path: app/build/outputs/apk/debug/*.apk
