@@ -1,0 +1,20 @@
+{
+  "source": "https://github.com/skywind3000/ECDICT",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2025 Linwei",
+  "entries": 770238,
+  "database_sha256": "e21994036dabfcca9f7df9cbade1baa3f7c98554b96198acfe77251e6f3806d9",
+  "database_size": 68227072,
+  "parts": [
+    {
+      "file": "general_dictionary.sqlite.gz.part01",
+      "sha256": "e81a11380edfc66564ab9b2ae59df8090762a68dc5085b17cae717a32670908b",
+      "size": 16777216
+    },
+    {
+      "file": "general_dictionary.sqlite.gz.part02",
+      "sha256": "ded7482b61f964a9b582d0232a1b49f9261ec156b803a5ee7c9c84466bcf0921",
+      "size": 11112791
+    }
+  ]
+}
