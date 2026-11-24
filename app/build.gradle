@@ -1,0 +1,97 @@
+import java.util.zip.GZIPInputStream
+import java.security.MessageDigest
+import groovy.json.JsonSlurper
+
+plugins { id 'com.android.application' }
+
+def dictionaryAssets = layout.buildDirectory.dir('generated/dictionaryAssets')
+tasks.register('prepareDictionary') {
+    inputs.dir(rootProject.file('dictionary'))
+    outputs.file(dictionaryAssets.map { it.file('general_dictionary.sqlite') })
+    doLast {
+        def directory = rootProject.file('dictionary')
+        def manifest = new JsonSlurper().parse(new File(directory, 'manifest.json'))
+        def sha256 = { file ->
+            def digest = MessageDigest.getInstance('SHA-256')
+            file.withInputStream { stream ->
+                byte[] buffer = new byte[65536]
+                int count
+                while ((count = stream.read(buffer)) != -1) digest.update(buffer, 0, count)
+            }
+            digest.digest().encodeHex().toString()
+        }
+        def parts = manifest.parts.collect { part ->
+            def file = new File(directory, part.file)
+            if (file.length() != part.size || sha256(file) != part.sha256) {
+                throw new GradleException("Dictionary part verification failed: ${part.file}")
+            }
+            file
+        }
+        def output = dictionaryAssets.get().file('general_dictionary.sqlite').asFile
+        output.parentFile.mkdirs()
+        def temporary = new File(output.path + '.tmp')
+        def streams = parts.collect { new FileInputStream(it) }
+        try {
+            new GZIPInputStream(new SequenceInputStream(Collections.enumeration(streams))).withCloseable { input ->
+                temporary.withOutputStream { target -> target << input }
+            }
+            if (temporary.length() != manifest.database_size || sha256(temporary) != manifest.database_sha256) {
+                throw new GradleException('Dictionary database verification failed')
+            }
+            java.nio.file.Files.move(temporary.toPath(), output.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+        } finally {
+            streams.each { it.close() }
+            temporary.delete()
+        }
+    }
+}
+
+def signingPath = System.getenv('MM_READER_KEYSTORE')
+def signingPassword = System.getenv('MM_READER_STORE_PASSWORD')
+def signingAlias = System.getenv('MM_READER_KEY_ALIAS')
+def signingKeyPassword = System.getenv('MM_READER_KEY_PASSWORD')
+def hasReleaseSigning = signingPath && signingPassword && signingAlias && signingKeyPassword
+
+android {
+    namespace 'com.jinnan.miaomiaoreader'
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+    defaultConfig {
+        applicationId 'com.jinnan.miaomiaoreader'
+        minSdk 26
+        targetSdk 35
+        versionCode 4
+        versionName '0.2.2'
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+    sourceSets.main.assets.srcDir(dictionaryAssets)
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    if (hasReleaseSigning) {
+        signingConfigs {
+            publisher {
+                storeFile file(signingPath)
+                storePassword signingPassword
+                keyAlias signingAlias
+                keyPassword signingKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            applicationIdSuffix '.dev'
+            versionNameSuffix '-dev'
+        }
+        release {
+            minifyEnabled false
+            if (hasReleaseSigning) signingConfig signingConfigs.publisher
+        }
+    }
+    testOptions { unitTests.returnDefaultValues = true }
+}
+tasks.named('preBuild').configure { dependsOn('prepareDictionary') }
+dependencies {
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+}
