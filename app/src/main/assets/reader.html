@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=3">
+<meta name="color-scheme" content="light dark">
+<style>
+:root{--bg:#f7f4ec;--fg:#293b33;--muted:#83877d;--green:#315c4a;--border:#dfdfd2;--red:#c34444;font-size:20px;color-scheme:light}
+*{box-sizing:border-box}
+html{background:var(--bg);scroll-behavior:auto}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--fg);padding:32px 24px 100px;font-family:Georgia,'Noto Serif',serif;-webkit-tap-highlight-color:transparent}
+body.night{--bg:#182b23;--fg:#eeeade;--muted:#a2afa0;--green:#b5cfad;--border:#3c5145;color-scheme:dark}
+.caption{display:flex;gap:12px;align-items:center;font:10px/1.6 system-ui,sans-serif;color:var(--muted);letter-spacing:1.6px;margin:0 0 28px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.caption::before{content:'';display:block;width:18px;height:2px;background:#b89e68}
+main{max-width:760px;margin:auto;min-height:70vh}
+p{margin:0 0 1.25em;line-height:1.95;text-align:left;overflow-wrap:anywhere}
+.token,.annotation{display:inline-flex;flex-direction:column;align-items:center;vertical-align:top;margin:0 .095em .12em;max-width:100%}
+.en{line-height:1.7}
+#text{touch-action:pan-y pinch-zoom;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.press-selected{background:#c8ddc7;border-radius:3px;outline:1px solid #7d9d83}
+#text .annotation .token.press-selected{background:#c8ddc7}
+.annotation>.en{border-radius:3px;padding:0 .08em;display:block}
+.annotation.highlight>.en{background:var(--mark,#f3df9d);color:#293b33;box-shadow:inset 0 -.1em 0 #ffffff18}
+.annotation[data-color="honey"]{--mark:#f3df9d}
+.annotation[data-color="sage"]{--mark:#c8ddc7}
+.annotation[data-color="sky"]{--mark:#c5dce9}
+.annotation[data-color="rose"]{--mark:#edcbd0}
+.annotation[data-color="lavender"]{--mark:#d9cfee}
+.annotation[data-color="apricot"]{--mark:#f1cfad}
+.annotation.underline>.en{text-decoration-line:underline;text-decoration-color:var(--red);text-decoration-thickness:1.5px;text-underline-offset:5px;text-decoration-skip-ink:none}
+.annotation.underline-double>.en{text-decoration-style:double}
+.annotation.underline-wavy>.en{text-decoration-style:wavy}
+.zh{font-family:system-ui,sans-serif;color:var(--green);font-size:.60rem;line-height:1.55;max-width:164px;white-space:normal;text-align:center;-webkit-user-select:none;user-select:none;padding-top:2px;letter-spacing:.02em}
+.hidden-zh .zh,.annotation.hide .zh{display:none}
+.annotation .token{margin:0;display:inline}
+.annotation.focused>.en{outline:2px solid #7d9d83;outline-offset:3px}
+.empty{font:15px/2 system-ui,sans-serif;color:var(--muted);padding:40px 2px}
+#selectbar{position:fixed;bottom:18px;left:20px;right:20px;max-width:720px;margin:auto;background:#244d40;color:#f7f4ec;border:1px solid #ffffff20;border-radius:18px;box-shadow:0 8px 30px #152e282a;padding:16px;font:500 14px/1.4 system-ui,sans-serif;display:none;z-index:10;touch-action:manipulation}
+body.tools-visible #selectbar{bottom:148px}
+::selection{background:#c8ddc7;color:#243b30}
+@media(min-width:600px){body{padding:40px 44px 110px}.caption{max-width:760px;margin-left:auto;margin-right:auto}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+<div class="caption" id="caption"></div>
+<main id="text" aria-label="英文正文"></main>
+<button id="selectbar" lang="zh-CN">标注所选内容</button>
+<script>
+'use strict';
+let page={blocks:[]},marks=[],settings={},flat=[];
+const palette=new Set(['honey','sage','sky','rose','lavender','apricot']);
+const lineStyles=new Set(['underline','underline-double','underline-wavy']);
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function init(data,annotations,options){
+ cancelGesture();activePointers.clear();page=data;marks=annotations;settings=options;flat=[].concat.apply([],page.blocks.map(b=>b.tokens));render();
+ setTimeout(()=>{if(Number.isInteger(options.focusToken)&&options.focusToken>=0)focus(options.focusToken);else window.scrollTo(0,options.scroll||0);},50);
+}
+function configure(options){settings=Object.assign(settings,options);applySettings();}
+function applySettings(){
+ document.documentElement.style.fontSize=(settings.font||20)+'px';
+ document.body.classList.toggle('night',!!settings.night);
+ document.body.classList.toggle('hidden-zh',settings.showChinese===false);
+ document.body.classList.toggle('tools-visible',!!settings.toolsVisible);
+}
+function render(){
+ applySettings();document.getElementById('caption').textContent=settings.caption||'';
+ let html='';const starts=new Map(marks.map(m=>[Number(m.start),m]));const covered=new Set();
+ for(const m of marks)for(let i=Number(m.start)+1;i<=Number(m.end);i++)covered.add(i);
+ for(const block of page.blocks){
+  html+='<p>';
+  for(const token of block.tokens){
+   if(covered.has(token.i))continue;
+   const m=starts.get(token.i);
+   if(m){
+    const parts=flat.filter(t=>t.i>=m.start&&t.i<=m.end);
+    const style=lineStyles.has(m.style)?'underline '+m.style:'highlight';
+    const color=palette.has(m.color)?m.color:'honey';
+    html+='<span class="annotation '+style+(Number(m.visible)?'':' hide')+'" data-color="'+color+'" data-start="'+Number(m.start)+'" data-end="'+Number(m.end)+'"><span class="en">'+parts.map(t=>'<span class="token" data-i="'+t.i+'">'+esc(t.t)+'</span>').join(' ')+'</span><span class="zh" lang="zh-CN">'+esc(m.translation)+'</span></span> ';
+   }else html+='<span class="token" data-i="'+token.i+'"><span class="en">'+esc(token.t)+'</span></span> ';
+  }
+  html+='</p>';
+ }
+ document.getElementById('text').innerHTML=html||'<div class="empty" lang="zh-CN">这一页未识别到正文。轻点中央打开工具栏，或向左滑动翻到下一页。</div>';
+}
+function updateAnnotations(data){const y=window.scrollY;marks=data;render();window.scrollTo(0,y);}
+function focus(index){
+ const token=document.querySelector('[data-i="'+Number(index)+'"]');
+ if(token){token.scrollIntoView({block:'center'});const mark=token.closest('.annotation');if(mark){mark.classList.add('focused');setTimeout(()=>mark.classList.remove('focused'),1800);}}
+}
+function tokenNode(n){if(!n)return null;const e=n.nodeType===1?n:n.parentElement;return e&&e.closest('[data-i]');}
+const activePointers=new Set();
+let gesture=null,longPressTimer=null,suppressClickUntil=0;
+function clearPress(){
+ clearTimeout(longPressTimer);longPressTimer=null;
+ document.querySelectorAll('.press-selected').forEach(n=>n.classList.remove('press-selected'));
+}
+function cancelGesture(){clearPress();gesture=null;}
+function rangeAt(node){
+ const annotation=node&&node.closest('.annotation');
+ if(annotation)return {start:+annotation.dataset.start,end:+annotation.dataset.end};
+ const token=node&&node.closest('[data-i]');
+ return token?{start:+token.dataset.i,end:+token.dataset.i}:null;
+}
+function showPress(g){
+ document.querySelectorAll('[data-i]').forEach(n=>n.classList.toggle('press-selected',+n.dataset.i>=g.start&&+n.dataset.i<=g.end));
+}
+function isCentral(x,y){return x>=innerWidth*.18&&x<=innerWidth*.82&&y>=innerHeight*.18&&y<=innerHeight*.82;}
+document.addEventListener('pointerdown',e=>{
+ if(e.pointerType==='mouse'&&e.button!==0)return;
+ activePointers.add(e.pointerId);
+ if(activePointers.size!==1){cancelGesture();suppressClickUntil=Date.now()+700;return;}
+ if(e.target.closest('button,a,input,textarea,select'))return;
+ const range=rangeAt(e.target);
+ const g={id:e.pointerId,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,time:Date.now(),moved:false,armed:false,anchor:range,start:range?.start,end:range?.end};
+ gesture=g;
+ longPressTimer=setTimeout(()=>{
+  if(gesture!==g||g.moved||activePointers.size!==1||!g.anchor)return;
+  g.armed=true;showPress(g);
+ },1000);
+});
+document.addEventListener('pointermove',e=>{
+ const g=gesture;if(!g||e.pointerId!==g.id)return;
+ g.lastX=e.clientX;g.lastY=e.clientY;
+ const dx=e.clientX-g.x,dy=e.clientY-g.y;
+ if(g.armed){
+  if(e.cancelable)e.preventDefault();
+  const range=rangeAt(document.elementFromPoint(e.clientX,e.clientY));
+  if(range){g.start=Math.min(g.anchor.start,range.start);g.end=Math.max(g.anchor.end,range.end);showPress(g);}
+  return;
+ }
+ if(Math.abs(dx)+Math.abs(dy)>12){g.moved=true;clearTimeout(longPressTimer);}
+ if(Math.abs(dx)>18&&Math.abs(dx)>Math.abs(dy)*1.5&&e.cancelable)e.preventDefault();
+},{passive:false});
+document.addEventListener('pointerup',e=>{
+ activePointers.delete(e.pointerId);
+ suppressClickUntil=Date.now()+700;
+ const g=gesture;if(!g||g.id!==e.pointerId)return;
+ const dx=e.clientX-g.x,dy=e.clientY-g.y,elapsed=Date.now()-g.time;
+ suppressClickUntil=Date.now()+700;
+ const start=g.start,end=g.end,armed=g.armed;
+ cancelGesture();
+ if(armed){
+  if(Number.isInteger(start)&&Number.isInteger(end))AndroidReader.select(start,end);
+  return;
+ }
+ if(g.moved&&elapsed<=1400&&Math.abs(dx)>=Math.max(64,innerWidth*.16)&&Math.abs(dx)>Math.abs(dy)*1.6){
+  AndroidReader.turnPage(dx<0?1:-1);return;
+ }
+ if(!g.moved&&elapsed<500&&isCentral(e.clientX,e.clientY))AndroidReader.toggleToolbar();
+});
+document.addEventListener('pointercancel',e=>{activePointers.delete(e.pointerId);cancelGesture();suppressClickUntil=Date.now()+700;});
+document.addEventListener('touchmove',e=>{if(gesture?.armed&&e.cancelable)e.preventDefault();},{passive:false});
+document.addEventListener('contextmenu',e=>{if(e.target.closest('#text'))e.preventDefault();});
+document.addEventListener('click',e=>{
+ if(e.target.closest('button,a,input,textarea,select'))return;
+ // Touch/mouse interaction is completed on pointerup. This fallback is for
+ // keyboard and accessibility-generated clicks, and never opens a word.
+ if(Date.now()<suppressClickUntil){e.preventDefault();return;}
+ if(isCentral(e.clientX,e.clientY))AndroidReader.toggleToolbar();
+});
+window.addEventListener('blur',()=>{activePointers.clear();cancelGesture();});
+let selectionTimer;
+document.addEventListener('selectionchange',()=>{clearTimeout(selectionTimer);selectionTimer=setTimeout(()=>{const s=window.getSelection(),a=tokenNode(s.anchorNode),b=tokenNode(s.focusNode);document.getElementById('selectbar').style.display=s.toString().trim()&&a&&b?'block':'none';},160);});
+document.getElementById('selectbar').onclick=()=>{
+ const s=window.getSelection(),a=tokenNode(s.anchorNode),b=tokenNode(s.focusNode);
+ if(a&&b){AndroidReader.select(Math.min(+a.dataset.i,+b.dataset.i),Math.max(+a.dataset.i,+b.dataset.i));s.removeAllRanges();document.getElementById('selectbar').style.display='none';}
+};
+let scrollTimer;
+window.addEventListener('scroll',()=>{clearTimeout(scrollTimer);const docId=settings.docId,atPage=settings.page;scrollTimer=setTimeout(()=>AndroidReader.saveScroll(docId,atPage,Math.round(window.scrollY)),350);},{passive:true});
+window.Reader={init,updateAnnotations,configure,focus};
+</script>
+</body>
+</html>
