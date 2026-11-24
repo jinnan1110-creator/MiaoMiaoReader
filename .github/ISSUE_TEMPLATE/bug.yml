@@ -1,0 +1,21 @@
+name: 问题报告
+description: 阅读、选词、翻页或导出遇到了问题
+title: "[问题] "
+body:
+  - type: input
+    id: environment
+    attributes:
+      label: 手机型号 / Android 版本 / 软件版本
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤、预期结果与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: 可公开的截图或示例
+      description: 请遮盖私人内容。不要上传私钥、完整阅读备份或未经许可的试题。

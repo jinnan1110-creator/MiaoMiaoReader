@@ -1,0 +1,30 @@
+name: 使用反馈
+description: 告诉我们你是否愿意继续使用妙妙阅读
+title: "[反馈] "
+body:
+  - type: dropdown
+    id: intention
+    attributes:
+      label: 你愿意继续使用吗？
+      options:
+        - 愿意，已经开始使用
+        - 愿意，但需要先解决一些问题
+        - 暂时不愿意
+        - 还没有安装，先关注
+    validations:
+      required: true
+  - type: textarea
+    id: material
+    attributes:
+      label: 主要读什么材料？
+      placeholder: 比如 PDF 学习材料、英文文章、扫描书籍；无需上传私人文件。
+  - type: textarea
+    id: experience
+    attributes:
+      label: 最有用的功能，以及最影响使用的问题
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: 手机型号、Android 版本、妙妙阅读版本
