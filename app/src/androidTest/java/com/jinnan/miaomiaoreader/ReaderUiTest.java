@@ -34,13 +34,26 @@ public class ReaderUiTest {
         CountDownLatch latch=new CountDownLatch(1);AtomicReference<String> value=new AtomicReference<>();inst.runOnMainSync(()->{WebView w=web(activity.getWindow().getDecorView());if(w==null){latch.countDown();return;}w.evaluateJavascript(script,result->{value.set(result);latch.countDown();});});assertTrue(latch.await(15,TimeUnit.SECONDS));return value.get();
     }
     private void waitJs(String script,String expected)throws Exception{long until=SystemClock.uptimeMillis()+45000;while(SystemClock.uptimeMillis()<until){if(expected.equals(js(script)))return;Thread.sleep(200);}throw new AssertionError("JS state missing: "+script+" = "+js(script));}
-    private void launch()throws Exception{Intent i=new Intent(inst.getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);activity=inst.startActivitySync(i);waitNode("继续阅读",null).performAction(AccessibilityNodeInfo.ACTION_CLICK);waitJs("document.querySelectorAll('[data-i]').length>10","true");}
+    private void launch()throws Exception{Intent i=new Intent(inst.getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);activity=inst.startActivitySync(i);waitNode("继续阅读   →",null).performAction(AccessibilityNodeInfo.ACTION_CLICK);waitJs("document.querySelectorAll('[data-i]').length>10","true");}
     private void tapToken(int index)throws Exception{
         js("document.querySelector('[data-i=\""+index+"\"]').scrollIntoView();true");
         JSONObject point=new JSONObject((String)new JSONTokener(js("JSON.stringify((function(){var r=document.querySelector('[data-i=\""+index+"\"]').getBoundingClientRect();return {x:(r.left+r.right)/2,y:(r.top+r.bottom)/2};})())")).nextValue());
         int[] origin=new int[2];inst.runOnMainSync(()->web(activity.getWindow().getDecorView()).getLocationOnScreen(origin));float density=inst.getTargetContext().getResources().getDisplayMetrics().density;
         float x=origin[0]+(float)point.getDouble("x")*density,y=origin[1]+(float)point.getDouble("y")*density;long now=SystemClock.uptimeMillis();
         inst.sendPointerSync(MotionEvent.obtain(now,now,MotionEvent.ACTION_DOWN,x,y,0));Thread.sleep(1150);inst.sendPointerSync(MotionEvent.obtain(now,SystemClock.uptimeMillis(),MotionEvent.ACTION_UP,x,y,0));
+    }
+    @Test public void platformLongPressCannotVibrateBeforeReaderReadiness()throws Exception{
+        launch();
+        inst.runOnMainSync(()->{
+            WebView reader=web(activity.getWindow().getDecorView());
+            assertTrue(reader instanceof ReaderWebView);
+            assertFalse(reader.isHapticFeedbackEnabled());
+            assertFalse(reader.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS));
+            assertFalse(reader.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS,0));
+            assertTrue(reader.performLongClick());
+            assertTrue(reader.performLongClick(10,10));
+        });
+        assertEquals("0",js("document.querySelectorAll('.press-selected').length"));
     }
     @Test public void editInlineChineseHideRestoreAndReopen()throws Exception{
         launch();tapToken(37);AccessibilityNodeInfo edit=waitNode(null,"android.widget.EditText");Bundle args=new Bundle();args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE,"雨林（复数）");assertTrue(edit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT,args));waitNode("保存标注",null).performAction(AccessibilityNodeInfo.ACTION_CLICK);
