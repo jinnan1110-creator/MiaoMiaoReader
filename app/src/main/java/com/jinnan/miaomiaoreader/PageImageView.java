@@ -109,7 +109,7 @@ public final class PageImageView extends View {
         switch(e.getActionMasked()){
             case MotionEvent.ACTION_DOWN:
                 cancelPress();lastX=downX=e.getX();lastY=downY=e.getY();downTime=e.getEventTime();
-                dragged=false;multiTouch=false;postDelayed(longPress,1000);return true;
+                dragged=false;multiTouch=false;postDelayed(longPress,ReaderWebView.LONG_PRESS_MILLIS);return true;
             case MotionEvent.ACTION_POINTER_DOWN:
                 multiTouch=true;dragged=true;cancelPress();return true;
             case MotionEvent.ACTION_MOVE:
@@ -128,6 +128,8 @@ public final class PageImageView extends View {
                 removeCallbacks(longPress);
                 float dx=e.getX()-downX,dy=e.getY()-downY;long elapsed=e.getEventTime()-downTime;
                 if(!multiTouch&&!scaleDetector.isInProgress()){
+                    if(!longHeld&&!dragged&&Math.abs(dx)+Math.abs(dy)<=ViewConfiguration.get(getContext()).getScaledTouchSlop()&&elapsed>=ReaderWebView.LONG_PRESS_MILLIS)
+                        armLongPress();
                     if(longHeld&&!dragged)hit(downX,downY);
                     else if(dragged&&zoom<=1.01f&&elapsed<=1400&&Math.abs(dx)>=Math.max(64*density,getWidth()*.16f)&&Math.abs(dx)>Math.abs(dy)*1.6f)turning.turn(dx<0?1:-1);
                     else if(!dragged&&elapsed<500&&e.getX()>=getWidth()*.18f&&e.getX()<=getWidth()*.82f&&e.getY()>=getHeight()*.18f&&e.getY()<=getHeight()*.82f)blankTap.run();
