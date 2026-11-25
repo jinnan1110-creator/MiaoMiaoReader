@@ -15,7 +15,7 @@ chmod +x gradlew
 
 ## 发行版
 
-正式版包名仍为 `com.jinnan.miaomiaoreader`，公开首版版本为 `0.2.2`，versionCode 为 `4`。发行私钥不在公开仓库中。
+正式版包名仍为 `com.jinnan.miaomiaoreader`，当前版本为 `0.2.3`，versionCode 为 `5`。发行私钥不在公开仓库中。
 
 维护者可在本机配置四个环境变量后执行 `./gradlew assembleRelease`：
 
@@ -27,6 +27,8 @@ chmod +x gradlew
 | `MM_READER_KEY_PASSWORD` | 私钥密码 |
 
 未提供完整签名配置时，Release 输出为未签名包。自行编译的包只有使用相同私钥，才能覆盖同包名的官方版本；不要将私钥或密码提交到仓库。
+
+默认包含所有支持的架构。需要单独构建 ARM64 手机安装包时，可以使用 `./gradlew assembleRelease -PreaderAbi=arm64-v8a`。
 
 ## 验证
 

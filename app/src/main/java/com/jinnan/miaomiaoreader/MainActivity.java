@@ -175,15 +175,15 @@ public final class MainActivity extends Activity {
     }
     private void help(){
         polish(new AlertDialog.Builder(this).setTitle("让阅读，慢慢发生")
-                .setMessage("快速轻点阅读页中央，上下工具栏会滑出；再次轻点即可收起。中央有英文单词也可轻点。\n\n长按单词约 1 秒后松手，在弹窗中修改中文注释、选择六色高亮或红色单线、双线、波浪线。长按约 1 秒后拖动，可选择短语；向左滑动下一页，向右滑动上一页。\n\n单词弹窗可播放英文单词发音，使用手机的英语语音引擎；短语不提供朗读。\n\n底部可以查看原页、隐藏或显示中文、查看我的标注。原页支持双指缩放。\n\n“我的标注”可以导出本书生词；书架可以导出全部生词。CSV 包含原文中的词语、你填写的中文、所在原句、文档及页码。相同词在不同语境分别保留。\n\n扫描文字可能有识别误差，可打开原页核对。原页的中文注释不会写入原 PDF。导出备份用于保留文档、识别缓存与标注。")
+                .setMessage("快速轻点阅读页中央，上下工具栏会滑出；再次轻点即可收起。中央有英文单词也可轻点。\n\n长按单词约 1 秒，震动后立即松手即可打开标注，在弹窗中修改中文注释、选择六色高亮或红色单线、双线、波浪线。长按约 1 秒后拖动，可选择短语；向左滑动下一页，向右滑动上一页。\n\n单词弹窗可播放英文单词发音，使用手机的英语语音引擎；短语不提供朗读。\n\n底部可以查看原页、隐藏或显示中文、查看我的标注。原页支持双指缩放。\n\n“我的标注”可以导出本书生词；书架可以导出全部生词。CSV 包含原文中的词语、你填写的中文、所在原句、文档及页码。相同词在不同语境分别保留。\n\n扫描文字可能有识别误差，可打开原页核对。原页的中文注释不会写入原 PDF。导出备份用于保留文档、识别缓存与标注。")
                 .setPositiveButton("开始阅读",null).create()).show();
     }
     private void openDocument(JSONObject item){
         generation++;doc=item;page=item.optInt("current_page",0);originalMode=false;ready=false;pageData=null;focusToken=-1;base();
         content=new FrameLayout(this);content.setBackgroundColor(BG);root.addView(content,new LinearLayout.LayoutParams(-1,0,1));
-        web=new WebView(this);WebSettings ws=web.getSettings();ws.setJavaScriptEnabled(true);
+        ReaderWebView reader=new ReaderWebView(this);web=reader;WebSettings ws=web.getSettings();ws.setJavaScriptEnabled(true);
         ws.setAllowFileAccess(false);ws.setAllowContentAccess(false);ws.setBlockNetworkLoads(true);ws.setBuiltInZoomControls(false);
-        web.setBackgroundColor(BG);web.addJavascriptInterface(new Bridge(),"AndroidReader");
+        web.setBackgroundColor(BG);web.addJavascriptInterface(new Bridge(reader),"AndroidReader");
         web.setWebViewClient(new WebViewClient(){
             @Override public void onPageFinished(WebView view,String url){
                 if(pageData==null||!ready||doc==null||view!=web)return;
@@ -200,7 +200,7 @@ public final class MainActivity extends Activity {
         createToolbars(item);loadPage(page);applyReadingTheme();
         if(!prefs.getBoolean("immersion_hint_seen",false)){
             prefs.edit().putBoolean("immersion_hint_seen",true).apply();
-            toast("轻点中央打开工具栏；长按 1 秒标注，左右滑动翻页");
+            toast("轻点中央打开工具栏；长按 1 秒，震动后松手标注；左右滑动翻页");
         }
     }
     private void createToolbars(JSONObject item){
@@ -245,6 +245,7 @@ public final class MainActivity extends Activity {
     }
     private JSONObject options()throws JSONException{
         return new JSONObject().put("docId",doc.getString("id")).put("page",page)
+                .put("longPressMillis",ReaderWebView.LONG_PRESS_MILLIS)
                 .put("font",prefs.getInt("font",20)).put("night",prefs.getBoolean("night",false))
                 .put("showChinese",prefs.getBoolean("showChinese",true)).put("toolsVisible",toolsVisible)
                 .put("caption","MIAOMIAO   /   "+String.format(Locale.US,"%02d",page+1)+"  ·  "+doc.optInt("pages")+" PAGES")
@@ -352,9 +353,17 @@ public final class MainActivity extends Activity {
         }catch(Exception e){error("标注读取失败",e);}
     }
     public final class Bridge {
-        @JavascriptInterface public void turnPage(int direction){if(direction==1||direction==-1)ui(()->loadPage(page+direction));}
-        @JavascriptInterface public void select(int start,int end){ui(()->MainActivity.this.select(start,end));}
-        @JavascriptInterface public void toggleToolbar(){ui(()->MainActivity.this.toggleToolbar());}
+        private final ReaderWebView owner;
+        Bridge(ReaderWebView owner){this.owner=owner;}
+        @JavascriptInterface public void turnPage(int direction){if(direction==1||direction==-1)ui(()->{if(owner==web)loadPage(page+direction);});}
+        @JavascriptInterface public void select(int start,int end){ui(()->{if(owner==web)MainActivity.this.select(start,end);});}
+        @JavascriptInterface public void toggleToolbar(){ui(()->{if(owner==web)MainActivity.this.toggleToolbar();});}
+        @JavascriptInterface public void selectionReady(String document,int atPage){
+            ui(()->{
+                if(owner==web&&ready&&!originalMode&&doc!=null&&document.equals(doc.optString("id"))&&atPage==page&&owner.isShown()&&owner.hasWindowFocus())
+                    owner.selectionReady();
+            });
+        }
         @JavascriptInterface public void saveScroll(String document,int atPage,int y){
             JSONObject current=doc;
             if(current!=null&&document.equals(current.optString("id"))&&page==atPage)
