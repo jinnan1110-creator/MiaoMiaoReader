@@ -105,6 +105,15 @@ function rangeAt(node){
 function showPress(g){
  document.querySelectorAll('[data-i]').forEach(n=>n.classList.toggle('press-selected',+n.dataset.i>=g.start&&+n.dataset.i<=g.end));
 }
+function eventTime(e){return Number.isFinite(e.timeStamp)?e.timeStamp:Date.now();}
+function longPressDelay(){return settings.longPressMillis||1000;}
+function armGesture(g){
+ if(gesture!==g||g.moved||g.armed||activePointers.size!==1||!g.anchor)return;
+ // The selection must be ready before Android is allowed to vibrate. A release
+ // delivered as soon as that feedback starts is therefore immediately valid.
+ g.armed=true;showPress(g);
+ AndroidReader.selectionReady(settings.docId,settings.page);
+}
 function isCentral(x,y){return x>=innerWidth*.18&&x<=innerWidth*.82&&y>=innerHeight*.18&&y<=innerHeight*.82;}
 document.addEventListener('pointerdown',e=>{
  if(e.pointerType==='mouse'&&e.button!==0)return;
@@ -112,12 +121,9 @@ document.addEventListener('pointerdown',e=>{
  if(activePointers.size!==1){cancelGesture();suppressClickUntil=Date.now()+700;return;}
  if(e.target.closest('button,a,input,textarea,select'))return;
  const range=rangeAt(e.target);
- const g={id:e.pointerId,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,time:Date.now(),moved:false,armed:false,anchor:range,start:range?.start,end:range?.end};
+ const g={id:e.pointerId,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,time:eventTime(e),moved:false,armed:false,anchor:range,start:range?.start,end:range?.end};
  gesture=g;
- longPressTimer=setTimeout(()=>{
-  if(gesture!==g||g.moved||activePointers.size!==1||!g.anchor)return;
-  g.armed=true;showPress(g);
- },1000);
+ longPressTimer=setTimeout(()=>armGesture(g),longPressDelay());
 });
 document.addEventListener('pointermove',e=>{
  const g=gesture;if(!g||e.pointerId!==g.id)return;
@@ -133,10 +139,14 @@ document.addEventListener('pointermove',e=>{
  if(Math.abs(dx)>18&&Math.abs(dx)>Math.abs(dy)*1.5&&e.cancelable)e.preventDefault();
 },{passive:false});
 document.addEventListener('pointerup',e=>{
- activePointers.delete(e.pointerId);
  suppressClickUntil=Date.now()+700;
- const g=gesture;if(!g||g.id!==e.pointerId)return;
- const dx=e.clientX-g.x,dy=e.clientY-g.y,elapsed=Date.now()-g.time;
+ const g=gesture;if(!g||g.id!==e.pointerId){activePointers.delete(e.pointerId);return;}
+ const dx=e.clientX-g.x,dy=e.clientY-g.y,elapsed=eventTime(e)-g.time;
+ // Input events and timeout callbacks can be queued in either order at the
+ // deadline. Accept a stationary release that has already reached the hold.
+ if(!g.armed&&!g.moved&&Math.abs(dx)+Math.abs(dy)<=12&&elapsed>=longPressDelay())armGesture(g);
+ if(gesture!==g){activePointers.delete(e.pointerId);return;}
+ activePointers.delete(e.pointerId);
  suppressClickUntil=Date.now()+700;
  const start=g.start,end=g.end,armed=g.armed;
  cancelGesture();
